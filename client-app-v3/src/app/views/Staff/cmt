@@ -1,0 +1,211 @@
+import React, { useEffect, useState } from "react";
+import { FastField, getIn } from "formik";
+import { isEqual } from "lodash";
+import clsx from "clsx";
+import ErrorIcon from "../ErrorIcon/ErrorIcon";
+import { getTextWidth, RequiredLabel } from "../CommonFunctions";
+import AutoWidthPopper from "../custom/AutoWidthPopper";
+import {
+  AUTOCOMPLETE_DEFAULT_INPUT_WIDTH,
+  AUTOCOMPLETE_CLEARABLE_ICON_SIZE,
+  AUTOCOMPLETE_FULL_PADDING_SIZE
+} from "../custom/constants";
+import { TextField } from "@material-ui/core";
+import AutoComplete from "@material-ui/lab/Autocomplete";
+
+const GlobitsPagingAutocompleteV3 = (props) => {
+  return (
+    <FastField
+      {...props}
+      name={props.name}
+      shouldUpdate={shouldComponentUpdate}
+    >
+      {({ field, meta, form }) => {
+        return (
+          <MyPagingAutocompleteV3
+            {...props}
+            field={field}
+            meta={meta}
+            setFieldValue={form.setFieldValue}
+          />
+        );
+      }}
+    </FastField>
+  );
+};
+
+function MyPagingAutocompleteV3(props) {
+  const {
+    name,
+    api,
+    displayData,
+    variant = "outlined",
+    size = "small",
+    searchObject,
+    label,
+    sortOptions,
+    field,
+    meta,
+    setFieldValue,
+    onChange,
+    getOptionSelected,
+    getOptionLabel,
+    allowLoadOptions = true,
+    sx,
+    disableClearable,
+    fullWidth = true,
+    requiredLabel,
+    ...otherProps
+  } = props;
+  const [open, setOpen] = React.useState(false);
+  const [options, setOptions] = React.useState([]);
+  const loading = allowLoadOptions ? (open && options.length === 0) : false;
+  const [inputWidth, setInputWidth] = useState(AUTOCOMPLETE_DEFAULT_INPUT_WIDTH);
+
+  React.useEffect(() => {
+    if (allowLoadOptions) {
+      let active = true;
+
+      if (!loading) {
+        return undefined;
+      }
+
+      (async () => {
+        const searchDto = {
+          pageSize: 1000,
+          pageIndex: 1,
+          ...searchObject,
+        };
+        const response = await api(searchDto);
+        const content = sortOptions
+          ? sortOptions(response?.data?.content)
+          : response?.data?.content || [];
+
+        if (active) {
+          setOptions(content);
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, allowLoadOptions]);
+
+
+  const defaultGetOptionSelected = (option, value) =>
+    option?.id === value?.id;
+  const defaultGetOptionLabel = (option) =>
+    displayData ? option?.[displayData] || "" : option?.["name"] || "";
+
+  const defaultHandleChange = (_, value) => {
+    setFieldValue(name, value ? value : null);
+  };
+
+  const isError = meta && meta.touched && meta.error
+
+  const value = otherProps?.value || field?.value || null
+  useEffect(() => {
+    if (!fullWidth) {
+      let currentSize = getTextWidth(value?.[displayData || "name"]?.trim()?.toString()) + AUTOCOMPLETE_FULL_PADDING_SIZE
+      if (disableClearable) {
+currentSize = currentSize - AUTOCOMPLETE_CLEARABLE_ICON_SIZE
+      }
+      if (currentSize > AUTOCOMPLETE_DEFAULT_INPUT_WIDTH) {
+        setInputWidth(currentSize)
+      } else {
+        setInputWidth(AUTOCOMPLETE_DEFAULT_INPUT_WIDTH)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
+  const displayLabel = label ? <>{label}{requiredLabel && <RequiredLabel />}</> : "";
+
+  return (
+    <>
+      {!fullWidth &&
+        <label htmlFor={name}>
+          {displayLabel}
+        </label>
+      }
+      <AutoComplete
+        {...field}
+        {...otherProps}
+        value={value}
+        id={name}
+        open={open}
+        onChange={onChange || defaultHandleChange}
+        onOpen={() => {
+          setOpen(true);
+        }}
+        onClose={() => {
+          setOpen(false);
+        }}
+        size={size}
+        getOptionSelected={
+          getOptionSelected || defaultGetOptionSelected
+        }
+        getOptionLabel={getOptionLabel || defaultGetOptionLabel}
+        options={options}
+        loading={loading}
+        autoHighlight
+        openOnFocus
+        disableClearable={disableClearable}
+        sx={{ ...sx, width: fullWidth ? "auto" : inputWidth }}
+        PopperComponent={AutoWidthPopper}
+        noOptionsText="Không có dữ liệu"
+        fullWidth={fullWidth}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={fullWidth ? displayLabel : null}
+            className={clsx(params?.className, "autocomplete-input")}
+            variant={variant}
+            fullWidth={fullWidth}
+            InputLabelProps={{
+              htmlFor: name,
+              shrink: true,
+            }}
+            error={meta && meta.touched && meta.error}
+            helperText={(fullWidth && isError) && meta.error}
+          />
+        )}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.stopPropagation();
+            event.preventDefault();
+          }
+          return true;
+        }}
+      />
+      {(isError && !fullWidth) && <ErrorIcon helperText={meta.error} />}
+    </>
+  );
+}
+
+const shouldComponentUpdate = (nextProps, currentProps) => {
+
+  return (
+    nextProps.name !== currentProps.name ||
+    nextProps.value !== currentProps.value ||
+    nextProps.onChange !== currentProps.onChange ||
+    nextProps.label !== currentProps.label ||
+    nextProps.required !== currentProps.required ||
+    nextProps.disabled !== currentProps.disabled ||
+    nextProps.readOnly !== currentProps.readOnly ||
+    nextProps.api !== currentProps.api ||
+    !isEqual(nextProps.searchObject, currentProps.searchObject) ||
+    nextProps.formik.isSubmitting !== currentProps.formik.isSubmitting ||
+    Object.keys(nextProps).length !== Object.keys(currentProps).length ||
+    getIn(nextProps.formik.values, currentProps.name) !==
+    getIn(currentProps.formik.values, currentProps.name) ||
+    getIn(nextProps.formik.errors, currentProps.name) !==
+getIn(currentProps.formik.errors, currentProps.name) ||
+    getIn(nextProps.formik.touched, currentProps.name) !==
+    getIn(currentProps.formik.touched, currentProps.name)
+  );
+};
+
+export default React.memo(GlobitsPagingAutocompleteV3);
